@@ -7,6 +7,9 @@ class FileNode:
     def add_child(self, child):
         self.children.append(child)
 
+    def remove_child(self, child):
+        self.children.remove(child)
+
     def __repr__(self):
         return f"FileNode(name={self.name}, is_file={self.is_file})"
     
@@ -36,3 +39,20 @@ class DirectoryTree:
         file_node = FileNode(parts[-1])
         file_node.is_file = True
         current.add_child(file_node)
+    
+    def list_directory(self, path: str):
+        # list all files and directories in the given path
+        # path is a string like "/dir1/dir2"
+        
+        parts = path.strip("/").split("/")
+        current = self.root
+        for part in parts:
+            found = False
+            for child in current.children:
+                if child.name == part:
+                    current = child
+                    found = True
+                    break
+            if not found:
+                return []
+        return [child.name for child in current.children]
