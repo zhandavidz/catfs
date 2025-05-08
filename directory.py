@@ -1,9 +1,15 @@
 class FileNode:
-    def __init__(self, name: str, is_file: bool = False):
+    def __init__(self, name: str, is_file: bool = False, parent = None):
         self.name = name
         self.children = [] # list to store child nodes (files or directories)
         self.is_file = is_file
         self.content = {}
+        self.parent = parent
+
+        if not is_file:
+            self.children.append(".", is_file = False, parent = self) # '.' self reference
+            if parent:
+                self.children.append("..", is_file = False, parent = parent) # '..' parent reference
 
     def add_child(self, child):
         self.children.append(child)
@@ -23,10 +29,12 @@ class DirectoryTree:
 
     def _traverse_to_node(self, path: str):
         parts = path.strip("/").split("/")
-        current = self.root # traverse from root
+        current = self.current_node if path.startswith(".") else self.root # traversal starting point
         for part in parts:
-            if not part: # skip empty parts
+            if not part or part == ".": # skip empty parts or "."
                 continue
+            if part == "..":
+                current = current.parent # go another level
             found = False
             for child in current.children:
                 if child.name == part and not child.is_file: # child match current path
@@ -104,8 +112,9 @@ class DirectoryTree:
         
         for child in current.children:
             if child.name == dir_name and not child.is_file:
+                if len(child.children) > 2: # itself
+                    current.remove_child(child) # remove dir if empty
+                    return False
                 current.remove_child(child) # remove dir if empty
                 return True
-            else:
-                return False
         return False
