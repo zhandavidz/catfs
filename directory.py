@@ -1,8 +1,9 @@
 class FileNode:
-    def __init__(self, name: str):
+    def __init__(self, name: str, is_file: bool = False):
         self.name = name
         self.children = [] # list to store child nodes (files or directories)
-        self.is_file = False
+        self.is_file = is_file
+        self.content = {}
 
     def add_child(self, child):
         self.children.append(child)
@@ -36,9 +37,9 @@ class DirectoryTree:
                 return None
         return current
 
-    def add_file(self, path: str):
+    def add_node(self, path: str, is_file: bool): #when u add a node, make sure to specify it's a dir or file
 
-        # add a file to the directory tree at specific path
+        # add a file/dir to the directory tree at specific path
         # path is a string like "/dir1/dir2/file.txt"
         
         parts = path.strip("/").split("/")
@@ -50,11 +51,11 @@ class DirectoryTree:
                     current = child
                     found = True
                     break
-            if not found: # doesn't exist, make new dir
-                new_dir = FileNode(part)
+            if not found: # doesn't exist, make new dir or file
+                new_dir = FileNode(part, is_file)
                 current.add_child(new_dir)
                 current = new_dir
-        # make + add the file node
+        # make + add the node
         file_node = FileNode(parts[-1])
         file_node.is_file = True
         current.add_child(file_node)
@@ -108,6 +109,3 @@ class DirectoryTree:
             else:
                 return False
         return False
-    
-    
-    
