@@ -1,7 +1,7 @@
 class FileNode:
     def __init__(self, name: str):
         self.name = name
-        self.children = []
+        self.children = [] # list to store child nodes (files or directories)
         self.is_file = False
 
     def add_child(self, child):
@@ -15,19 +15,21 @@ class FileNode:
     
 class DirectoryTree:
     def __init__(self):
+
+        # initialize the dir with root
         self.root = FileNode("root")
-        self.current_node = self.root
+        self.current_node = self.root # points to current working dir
 
     def _traverse_to_node(self, path: str):
         parts = path.strip("/").split("/")
-        current = self.root
+        current = self.root # traverse from root
         for part in parts:
-            if not part:
+            if not part: # skip empty parts
                 continue
             found = False
             for child in current.children:
-                if child.name == part and not child.is_file:
-                    current = child
+                if child.name == part and not child.is_file: # child match current path
+                    current = child 
                     found = True
                     break
             if not found:
@@ -48,10 +50,11 @@ class DirectoryTree:
                     current = child
                     found = True
                     break
-            if not found:
+            if not found: # doesn't exist, make new dir
                 new_dir = FileNode(part)
                 current.add_child(new_dir)
                 current = new_dir
+        # make + add the file node
         file_node = FileNode(parts[-1])
         file_node.is_file = True
         current.add_child(file_node)
@@ -63,6 +66,7 @@ class DirectoryTree:
         current = self._traverse_to_node(path)
         if current is None:
             return []
+        # return names of children
         return [child.name for child in current.children]
     
     def remove_file(self, path: str):
@@ -71,8 +75,8 @@ class DirectoryTree:
         # path is a string like "/dir1/dir2/file.txt"
         
         parts = path.strip("/").split("/")
-        dir_path = "/".join(parts[:-1])
-        file_name = parts[-1]
+        dir_path = "/".join(parts[:-1]) # get path
+        file_name = parts[-1] # get the file name
 
         current = self._traverse_to_node(dir_path)
         if current is None:
@@ -83,3 +87,27 @@ class DirectoryTree:
                 current.remove_child(child)
                 return True
         return False
+    
+    def remove_directory(self, path: str):
+
+        # remove a directory from the directory tree at specific path
+        # path is a string like "/dir1/dir2"
+
+        parts = path.strip("/").split("/")
+        dir_path = "/".join(parts[:-1]) # get path
+        dir_name = parts[-1] # dir name
+
+        current = self._traverse_to_node(dir_path)
+        if current is None:
+            return False
+        
+        for child in current.children:
+            if child.name == dir_name and not child.is_file:
+                current.remove_child(child) # remove dir if empty
+                return True
+            else:
+                return False
+        return False
+    
+    
+    
