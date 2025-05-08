@@ -56,3 +56,25 @@ class DirectoryTree:
             if not found:
                 return []
         return [child.name for child in current.children]
+    
+    def remove_file(self, path: str):
+        
+        # remove a file from the directory tree at specific path
+        # path is a string like "/dir1/dir2/file.txt"
+        
+        parts = path.strip("/").split("/")
+        current = self.root
+        for part in parts[:-1]:
+            found = False
+            for child in current.children:
+                if child.name == part and not child.is_file:
+                    current = child
+                    found = True
+                    break
+            if not found:
+                return False
+        for child in current.children:
+            if child.name == parts[-1] and child.is_file:
+                current.remove_child(child)
+                return True
+        return False
