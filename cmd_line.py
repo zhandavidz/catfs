@@ -13,11 +13,12 @@ def command_prompt():
     
     # Set initial role (can be changed via command line argument)
     import sys
-    role = "Visitor"  # default role
+    role = "Admin"  # default role
     if len(sys.argv) > 1:
         role = sys.argv[1]
-    dt.root.set_permissions(role)
-    
+
+    dt.set_permissions(role)
+
     while True:
         try:
             user_input = input("catfs 🐱 ")
@@ -38,8 +39,8 @@ def command_prompt():
                 dt.meow(args[0], args[1], args[2])
             elif command == "boop" and len(args) == 1:
                 dt.boop(args[0])
-            elif command == "rescue" and len(args) == 1:
-                dt.rescue(args[0])
+            elif command == "rescue" and len(args) == 2:
+                dt.rescue(args[0], args[1])
             elif command == "pawprint":
                 dt.pawprint()
             elif command == "copycat" and len(args) == 2:
@@ -65,7 +66,7 @@ def command_prompt():
                 print("cat [cat_name] - View cat details")
                 print("meow [cat_name] [property] [value] - Update cat properties")
                 print("boop [cat_name] - Execute cat")
-                print("rescue [cat_name] - Create new cat")
+                print("rescue [cat_name] [permissions] - Create new cat")
                 print("pawprint - Show current directory")
                 print("copycat [cat_name] [new_cat_name] - Copy cat")
                 print("recollar [cat_name] [new_name] - Rename cat")
