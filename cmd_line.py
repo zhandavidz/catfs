@@ -1,24 +1,29 @@
 import argparse
-from directory import DirectoryTree
+import os
+import pickle
+from directory import DirectoryTree, Role
 
-def parse_command(command):
-    """Parses a command string into a list of arguments."""
-    parser = argparse.ArgumentParser(description="Command parser")
-    parser.add_argument('args', nargs=argparse.REMAINDER, help="Command arguments")
-    return parser.parse_args(command.split()).args
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Cat Cafe File System")
+    parser.add_argument("-c", "--cache", type=int, default=0, help="Cache size (not implemented yet)")
+    parser.add_argument("-p", "--perm", type=str, default="visitor", choices=["visitor", "volunteer", "staff", "admin"], help="Role permission level")
+    parser.add_argument("-n", "--name", type=str, required=True, help="Name of the cafe to open")
+    return parser.parse_args()
 
-def command_prompt():
+def load_or_create_tree(name, role):
+    """Load DirectoryTree from pickle file or create a new one."""
+    pkl_path = os.path.join("cafes", f"{name}.pkl")
+    if os.path.exists(pkl_path):
+        with open(pkl_path, "rb") as f:
+            tree = pickle.load(f)
+            tree.role = role  # update role for this session
+            return tree
+    else:
+        return DirectoryTree(name=name, role=role)
+
+def command_prompt(dt):
     """Starts the command prompt loop."""
-    dt = DirectoryTree()
-    
-    # Set initial role (can be changed via command line argument)
-    import sys
-    role = "Admin"  # default role
-    if len(sys.argv) > 1:
-        role = sys.argv[1]
-
-    dt.set_permissions(role)
-
     while True:
         try:
             user_input = input("catfs 🐱 ")
@@ -26,7 +31,7 @@ def command_prompt():
                 print("Exiting command prompt. Goodbye!")
                 break
                 
-            args = parse_command(user_input)
+            args = user_input.split()
             if not args:
                 continue
                 
@@ -84,6 +89,18 @@ def command_prompt():
         except Exception as e:
             print(f"Error: {e}")
 
+def main():
+    """Main entry point for the program."""
+    args = parse_args()
+    role_map = {
+        "visitor": Role.VISITOR,
+        "volunteer": Role.VOLUNTEER,
+        "staff": Role.STAFF,
+        "admin": Role.ADMIN
+    }
+    dt = load_or_create_tree(args.name, role_map[args.perm])
+    command_prompt(dt)
+
 if __name__ == "__main__":
-    command_prompt()
+    main()
 
