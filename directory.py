@@ -1,5 +1,6 @@
 import os
 import pickle
+from cache import LRUCache
 from enum import Enum
 
 # Role enum and global permissions

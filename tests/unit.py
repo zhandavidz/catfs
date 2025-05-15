@@ -11,25 +11,22 @@ import unittest
 import sys
 import time
 import logging
-import pytest
 import random
 from datetime import datetime
+import io
+from contextlib import redirect_stdout
 
 # Add the parent directory to sys.path to allow imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from directory import DirectoryTree
-from directory import FileNode
+from directory import DirectoryTree, FileNode, FolderNode, Role
 from cache import LRUCache
-import io
-from contextlib import redirect_stdout
-
 
 class TestFileNode(unittest.TestCase):
     def setUp(self):
-        self.parent = FileNode("parent", is_file=False)
-        self.file = FileNode("test.txt", is_file=True, parent=self.parent)
-        self.dir = FileNode("test_dir", is_file=False, parent=self.parent)
+        self.parent = FolderNode("parent")
+        self.file = FileNode("test.txt", parent=self.parent)
+        self.dir = FolderNode("test_dir", parent=self.parent)
 
     def test_file_node_creation(self):
         self.assertEqual(self.file.name, "test.txt")
@@ -45,45 +42,40 @@ class TestFileNode(unittest.TestCase):
         self.assertFalse(self.file.set_property("invalid", "value"))
 
     def test_permissions(self):
-        self.file.set_permissions("-r")
-        self.assertTrue(self.file.permissions['pet'])
-        self.assertFalse(self.file.permissions['feed'])
-        self.assertFalse(self.file.permissions['groom'])
-
-        self.file.set_permissions("-rw")
-        self.assertTrue(self.file.permissions['pet'])
-        self.assertTrue(self.file.permissions['feed'])
-        self.assertFalse(self.file.permissions['groom'])
-
-        self.file.set_permissions("-rwx")
-        self.assertTrue(self.file.permissions['pet'])
-        self.assertTrue(self.file.permissions['feed'])
-        self.assertTrue(self.file.permissions['groom'])
+        # Test can_pet/can_feed/can_groom logic
+        self.file.required_role = Role.VISITOR
+        self.assertTrue(self.file.can_pet(Role.VISITOR))
+        self.assertTrue(self.file.can_feed(Role.STAFF))
+        self.assertFalse(self.file.can_groom(Role.VISITOR))
+        self.file.required_role = Role.STAFF
+        self.assertFalse(self.file.can_feed(Role.VISITOR))
+        self.assertTrue(self.file.can_feed(Role.ADMIN))
 
     def test_directory_references(self):
         self.assertEqual(self.dir.dot, self.dir)
         self.assertEqual(self.dir.dotdot, self.parent)
 
-
 class TestDirectoryTree(unittest.TestCase):
     def setUp(self):
-        self.tree = DirectoryTree()
-        # Set up some test data with proper permissions
-        self.tree.rescue("whiskers", "-rwx")
-        self.tree.rescue("mittens", "-r")
+        # Use a unique name for each test to avoid pickle conflicts
+        self.cafe_name = f"testcafe_{random.randint(0, int(1e9))}"
+        self.tree = DirectoryTree(name=self.cafe_name, role=Role.ADMIN)
+        self.tree.rescue("whiskers", Role.ADMIN)
+        self.tree.rescue("mittens", Role.VISITOR)
         self.tree.mkcby("cubby1")
         self.tree.walk("cubby1")
-        self.tree.rescue("shadow", "-rw")
-        self.tree.walk("root")
-        
-        # Set user permissions
-        self.tree.root.set_permissions("-rwx")  # Give user full permissions
+        self.tree.rescue("shadow", Role.VOLUNTEER)
+        self.tree.walk("/")
+
+    def tearDown(self):
+        # Clean up the pickle file after each test
+        pkl_path = os.path.join("cafes", f"{self.cafe_name}.pkl")
+        if os.path.exists(pkl_path):
+            os.remove(pkl_path)
 
     def test_cat_command(self):
-        # Test viewing cat with read permission
         self.tree.meow("whiskers", "age", "2")
         self.tree.meow("whiskers", "mood", "happy")
-        
         f = io.StringIO()
         with redirect_stdout(f):
             self.tree.cat("whiskers")
@@ -91,22 +83,24 @@ class TestDirectoryTree(unittest.TestCase):
         self.assertIn("Cat: whiskers", output)
         self.assertIn("age: 2", output)
         self.assertIn("mood: happy", output)
-
         # Test viewing cat without read permission
+        self.tree.role = Role.VISITOR
         f = io.StringIO()
         with redirect_stdout(f):
-            self.tree.cat("mittens")
+            self.tree.cat("whiskers")
         self.assertIn("Permission denied", f.getvalue())
 
     def test_meow_command(self):
         # Test setting cat properties with write permission
         self.tree.meow("whiskers", "age", "3")
-        self.assertEqual(self.tree._find_node_in_current("whiskers").get_property("age"), "3")
-        
-        # Test setting properties without write permission
+        whiskers = self.tree._find_node_in_current("whiskers")
+        self.assertIsNotNone(whiskers)
+        if whiskers is not None:
+            self.assertEqual(whiskers.get_property("age"), "3")
+        self.tree.role = Role.VISITOR
         f = io.StringIO()
         with redirect_stdout(f):
-            self.tree.meow("mittens", "age", "3")
+            self.tree.meow("whiskers", "age", "4")
         self.assertIn("Permission denied", f.getvalue())
 
         # Test invalid property
@@ -116,35 +110,24 @@ class TestDirectoryTree(unittest.TestCase):
         self.assertIn("Invalid property", f.getvalue())
 
     def test_boop_command(self):
-
         f = io.StringIO()
         with redirect_stdout(f):
             self.tree.boop("whiskers")
         output = f.getvalue()
         self.assertIn("purrs contentedly", output)
-
-        # Test executing cat without execute permission
+        self.tree.role = Role.VISITOR
         f = io.StringIO()
         with redirect_stdout(f):
-            self.tree.boop("mittens")
+            self.tree.boop("whiskers")
         self.assertIn("Permission denied", f.getvalue())
 
     def test_rescue_command(self):
-        # Test creating new cat with valid permissions
-        self.tree.rescue("newcat", "-rwx")
+        self.tree.rescue("newcat", Role.ADMIN)
         self.assertIsNotNone(self.tree._find_node_in_current("newcat"))
-        
-        # Test creating duplicate cat
         f = io.StringIO()
         with redirect_stdout(f):
-            self.tree.rescue("newcat", "-rwx")
+            self.tree.rescue("newcat", Role.ADMIN)
         self.assertIn("already exists", f.getvalue())
-
-        # Test creating cat with invalid permissions
-        f = io.StringIO()
-        with redirect_stdout(f):
-            self.tree.rescue("invalidcat", "invalid")
-        self.assertIn("Invalid permissions", f.getvalue())
 
     def test_pawprint_command(self):
         f = io.StringIO()
@@ -158,9 +141,8 @@ class TestDirectoryTree(unittest.TestCase):
         self.tree.copycat("whiskers", "whiskers_copy")
         copy = self.tree._find_node_in_current("whiskers_copy")
         self.assertIsNotNone(copy)
-        self.assertEqual(copy.get_property("age"), "2")
-
-        # Test copying non-existent cat
+        if copy is not None:
+            self.assertEqual(copy.get_property("age"), "2")
         f = io.StringIO()
         with redirect_stdout(f):
             self.tree.copycat("nonexistent", "copy")
@@ -179,40 +161,42 @@ class TestDirectoryTree(unittest.TestCase):
         self.assertIn("not found", f.getvalue())
 
     def test_walk_command(self):
-        # Test changing directory
-        self.tree.walk("..")
-        self.assertEqual(self.tree.current_node.name, "root")
-        
-        # Test invalid directory
+        self.tree.walk("cubby1")
+        self.assertEqual(self.tree.current_node.name, "cubby1")
         f = io.StringIO()
         with redirect_stdout(f):
             self.tree.walk("nonexistent")
         self.assertIn("not found", f.getvalue())
 
     def test_adopted_command(self):
-        # Test removing cat
         self.tree.adopted("whiskers")
         self.assertIsNone(self.tree._find_node_in_current("whiskers"))
-
-        # Test removing non-existent cat
         f = io.StringIO()
         with redirect_stdout(f):
             self.tree.adopted("nonexistent")
         self.assertIn("not found", f.getvalue())
 
     def test_carry_commands(self):
-        # Test carrying cats
-        random.seed(42)  # For deterministic testing
-        self.tree.carry("whiskers")
-        f = io.StringIO()
-        with redirect_stdout(f):
-            self.tree.carrying()
-        self.assertIn("whiskers", f.getvalue())
-        
-        # Test putting down cat
-        self.tree.put("whiskers")
-        self.assertIsNotNone(self.tree._find_node_in_current("whiskers"))
-
+        random.seed(42)
+        success_detected = False
+        failure_detected = False
+        # Loop until both success and failure have been detected
+        while not (success_detected and failure_detected):
+            f = io.StringIO()
+            with redirect_stdout(f):
+                self.tree.carry("whiskers")
+            output = f.getvalue()
+            if "Successfully carrying whiskers" in output:
+                success_detected = True
+                # Test putting down cat only after a success
+                f2 = io.StringIO()
+                with redirect_stdout(f2):
+                    self.tree.carrying()
+                self.assertIn("whiskers", f2.getvalue())
+                self.tree.put("whiskers")
+                self.assertIsNotNone(self.tree._find_node_in_current("whiskers"))
+            if "Failed to carry whiskers" in output:
+                failure_detected = True
         # Test carrying non-existent cat
         f = io.StringIO()
         with redirect_stdout(f):
@@ -238,12 +222,33 @@ class TestDirectoryTree(unittest.TestCase):
         self.assertIn("shadow", output)
         self.assertIn("cubby", output)
 
+    def test_find_command(self):
+        # Test finding a cat in the current cubby
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("whiskers")
+        output = f.getvalue()
+        self.assertIn("Found whiskers", output)
+        # Test finding a cat in a different cubby
+        self.tree.walk("cubby1")
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("shadow")
+        output = f.getvalue()
+        self.assertIn("Found shadow", output)
+        # Test not finding a cat
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("notacat")
+        output = f.getvalue()
+        self.assertIn("notacat not found", output)
+
 class TestLRUCache(unittest.TestCase):
     def setUp(self):
         self.cache = LRUCache(capacity=2)
-        self.file1 = FileNode("file1.txt", is_file=True)
-        self.file2 = FileNode("file2.txt", is_file=True)
-        self.file3 = FileNode("file3.txt", is_file=True)
+        self.file1 = FileNode("file1.txt")
+        self.file2 = FileNode("file2.txt")
+        self.file3 = FileNode("file3.txt")
 
     def test_cache_operations(self):
         # Test basic put and get
