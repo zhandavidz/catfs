@@ -42,12 +42,40 @@ class FileNode:
 
     def set_property(self, property_name, value):
         if property_name in self.content:
+            print(f"Setting {property_name} to {value}")
             self.content[property_name] = value
             return True
         return False
 
     def get_property(self, property_name):
         return self.content.get(property_name)
+
+    def __repr__(self):
+        return f"FileNode(name={self.name}, is_file={self.is_file})"
+    
+    def set_permissions(self, permissions):
+        if permissions == "-r":
+            self.permissions['pet'] = True
+        elif permissions == "-rw":
+            self.permissions['pet'] = True
+            self.permissions['feed'] = True
+        elif permissions == "-rwx":
+            self.permissions['pet'] = True
+            self.permissions['feed'] = True
+            self.permissions['groom'] = True
+
+
+class DirectoryTree:
+    def __init__(self):
+        # initialize the dir with root
+        self.root = FileNode("root")
+        self.current_node = self.root # points to current working dir
+        self.carried_cats = [] # cats being carried
+        self.permissions = {
+            'pet': False,
+            'feed': False,
+            'groom': False
+        }
 
     def set_permissions(self, role):
         if role == "Visitor":
@@ -63,16 +91,6 @@ class FileNode:
             self.permissions['pet'] = True
             self.permissions['feed'] = True
             self.permissions['groom'] = True
-
-    def __repr__(self):
-        return f"FileNode(name={self.name}, is_file={self.is_file})"
-    
-class DirectoryTree:
-    def __init__(self):
-        # initialize the dir with root
-        self.root = FileNode("root")
-        self.current_node = self.root # points to current working dir
-        self.carried_cats = [] # cats being carried
 
     def _traverse_to_node(self, path: str):
         parts = path.strip("/").split("/")
@@ -153,7 +171,7 @@ class DirectoryTree:
         
         for child in current.children:
             if child.name == dir_name and not child.is_file:
-                if len(child.children) > 2: # itself
+                if len(child.children) > 0: # itself
                     current.remove_child(child) # remove dir if empty
                     return False
                 current.remove_child(child) # remove dir if empty
@@ -163,41 +181,78 @@ class DirectoryTree:
     def cat(self, cat_name):
         """Prints details about a cat."""
         node = self._find_node_in_current(cat_name)
-        if node and node.is_file:
-            print(f"Cat: {node.name}")
-            for prop, value in node.content.items():
-                if value is not None:
-                    print(f"{prop}: {value}")
-        else:
+        if not node:
             print(f"Cat {cat_name} not found!")
+            return
+        if not node.is_file:
+            print(f"{cat_name} is not a cat!")
+            return
+        if not node.permissions['pet']:
+            print("Permission denied: cat needs petting permission")
+            return
+        if not self.permissions['pet']:
+            print("Permission denied: you need petting permission")
+            return
+            
+        print(f"Cat: {node.name}")
+        for prop, value in node.content.items():
+            if value is not None:
+                print(f"{prop}: {value}")
 
     def meow(self, cat_name, property_name, value):
         """Write details about a cat."""
         node = self._find_node_in_current(cat_name)
-        if node and node.is_file and node.permissions['feed']:
-            if node.set_property(property_name, value):
-                print(f"Updated {property_name} for {cat_name}")
-            else:
-                print(f"Invalid property: {property_name}")
-        else:
-            print("Permission denied or cat not found!")
+        if not node:
+            print(f"Cat {cat_name} not found!")
+            return
+        if not node.is_file:
+            print(f"{cat_name} is not a cat!")
+            return
+        if not node.permissions['feed']:
+            print("Permission denied: cat needs feeding permission")
+            return
+        if not self.permissions['feed']:
+            print("Permission denied: you need feeding permission")
+            return
+        if not node.set_property(property_name, value):
+            print(f"Invalid property: {property_name}")
+            return
+        print(f"Updated {property_name} for {cat_name}")
 
     def boop(self, cat_name):
         """Executes the cat (if user has groom permission)."""
         node = self._find_node_in_current(cat_name)
-        if node and node.is_file and node.permissions['groom']:
-            print(f"*{cat_name} purrs contentedly*")
-        else:
-            print("Permission denied or cat not found!")
+        if not node:
+            print(f"Cat {cat_name} not found!")
+            return
+        if not node.is_file:
+            print(f"{cat_name} is not a cat!")
+            return
+        if not node.permissions['groom'] and not self.permissions['groom']:
+            print("Permission denied: cat needs grooming permission")
+            return
+        if not self.permissions['groom']:
+            print("Permission denied: you need grooming permission")
+            return
+        print(f"*{cat_name} purrs contentedly*")
 
-    def rescue(self, cat_name):
+    def rescue(self, cat_name, permissions):
         """Creates a new cat."""
-        if not self._find_node_in_current(cat_name):
-            new_cat = FileNode(cat_name, is_file=True, parent=self.current_node)
-            self.current_node.add_child(new_cat)
-            print(f"Rescued new cat: {cat_name}")
-        else:
+        if self._find_node_in_current(cat_name):
             print(f"Cat {cat_name} already exists!")
+            return
+        if permissions not in ["-r", "-rw", "-rwx"]:
+            print("Invalid permissions. Must be '-r', '-rw', or '-rwx'")
+            return
+            
+        new_cat = FileNode(cat_name, is_file=True, parent=self.current_node)
+        new_cat.permissions = {
+            'pet': '-r' in permissions,
+            'feed': '-rw' in permissions,
+            'groom': '-rwx' in permissions
+        }
+        self.current_node.add_child(new_cat)
+        print(f"Rescued new cat: {cat_name}")
 
     def pawprint(self):
         """Prints current working directory."""
