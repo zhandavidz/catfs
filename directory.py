@@ -89,77 +89,74 @@ class DirectoryTree:
         self.root = FolderNode("root")
         self.current_node = self.root
         self._save_to_pkl()
+
     def _save_to_pkl(self):
         with open(self._pkl_path, "wb") as f:
             pickle.dump(self, f)
+
     def _traverse_to_node(self, path: str):
+        if path[0] == "/":
+            current = self.root
+        else:
+            current = self.current_node
         parts = path.strip("/").split("/")
-        current = self.current_node if path.startswith(".") else self.root
+        # current = self.current_node if path.startswith(".") else self.root
         for part in parts:
             if not part:
                 continue
+            if current.is_file:
+                return None
             child = current.get_child(part)
             if child is None:
                 return None
             current = child
         return current
-    def add_node(self, path: str, is_file: bool, required_role: Role = Role.STAFF):
-        # add a file/dir to the directory tree at specific path
-        # path is a string like "/dir1/dir2/file.txt"
-        parts = path.strip("/").split("/")
-        current = self.root
-        for part in parts[:-1]:
-            found = False
-            for child in current.children:
-                if child.name == part and not child.is_file:
-                    current = child
-                    found = True
-                    break
-            if not found:
-                new_dir = FolderNode(part, current)
-                current.add_child(new_dir)
-                current = new_dir
-        if is_file:
-            file_node = FileNode(parts[-1], required_role, current)
-            current.add_child(file_node)
+    
+    def _find_node_in_current(self, name):
+        for child in self.current_node.children:
+            if child.name == name:
+                return child
+        return None
+    
+    def _find_file_in_tree(self, name):
+        """takes a file name and returns the file node if it exists in the tree, otherwise None"""
+        # FIXME: eventually use cache here if enabled
+        def _recursively_find_file(node, name):
+            # Recursively search in children
+            for child in node.children:
+                if child.name == name:
+                    return child
+            for child in node.children:
+                if not child.is_file:
+                    found = _recursively_find_file(child, name)
+                    if found:
+                        return found
+            return None
+
+        result = _recursively_find_file(self.root, name)
+
+
+        return result
+    
+    def _get_wd_of_node(self, node):
+        """does pwd on that node"""
+        path = []
+        current = node
+        while current is not None and current != self.root:
+            path.append(current.name)
+            current = getattr(current, 'parent', None)
+        return f"/{"/".join(reversed(path))}"
+            
+    
+    def find(self, name):
+        """Finds a cat in the whole tree."""
+        node = self._find_file_in_tree(name)
+        if node:
+            print(f"Found {name} in {self._get_wd_of_node(node)}")
         else:
-            folder_node = FolderNode(parts[-1], current)
-            current.add_child(folder_node)
-        self._save_to_pkl()
-    def remove_file(self, path: str):
-        # remove a file from the directory tree at specific path
-        # path is a string like "/dir1/dir2/file.txt"
-        parts = path.strip("/").split("/")
-        dir_path = "/".join(parts[:-1])
-        file_name = parts[-1]
-        current = self._traverse_to_node(dir_path)
-        if current is None:
-            return False
-        for child in current.children:
-            if child.name == file_name and child.is_file:
-                current.remove_child(child)
-                self._save_to_pkl()
-                return True
-        return False
-    def remove_directory(self, path: str):
-        # remove a directory from the directory tree at specific path
-        # path is a string like "/dir1/dir2"
-        parts = path.strip("/").split("/")
-        dir_path = "/".join(parts[:-1])
-        dir_name = parts[-1]
-        current = self._traverse_to_node(dir_path)
-        if current is None:
-            return False
-        for child in current.children:
-            if child.name == dir_name and not child.is_file:
-                if len(child.children) > 0:
-                    return False
-                current.remove_child(child)
-                self._save_to_pkl()
-                return True
-        return False
+            print(f"{name} not found in the tree")
     def rescue(self, cat_name, required_role: Role = Role.STAFF):
-        # Creates a new cat with a required role
+        """Creates a new cat with a required role"""
         if self._find_node_in_current(cat_name):
             print(f"Cat {cat_name} already exists!")
             return
@@ -167,19 +164,9 @@ class DirectoryTree:
         self.current_node.add_child(new_cat)
         self._save_to_pkl()
         print(f"Rescued new cat: {cat_name} (role required: {required_role.name})")
-    def _find_node_in_current(self, name):
-        for child in self.current_node.children:
-            if child.name == name:
-                return child
-        return None
     def pawprint(self):
-        # Prints current working directory
-        path = []
-        current = self.current_node
-        while current is not None and current != self.root:
-            path.append(current.name)
-            current = getattr(current, 'parent', None)
-        print("/" + "/".join(reversed(path)))
+        """Prints current working directory (pwd)"""
+        print(f"Current cubby: {self._get_wd_of_node(self.current_node)}")
     def cat(self, cat_name):
         """Prints details about a cat."""
         node = self._find_node_in_current(cat_name)
@@ -209,7 +196,7 @@ class DirectoryTree:
             print("Permission denied: you need feeding permission")
             return
         if not node.set_property(property_name, value):
-            print(f"Invalid property: {property_name}")
+            print(f"Invalid property: {property_name}, valid properties are: age, mood, date_found, date_fed")
             return
         self._save_to_pkl()
         print(f"Updated {property_name} for {cat_name}")
@@ -285,9 +272,9 @@ class DirectoryTree:
                 print(f"- {cat.name}")
         else:
             print("Not carrying any cats")
-    def put(self, cat_name):
+    def put(self, cat_name=None):
         """Drops a cat into current directory."""
-        if cat_name == "all":
+        if cat_name is None:
             for cat in self.carried_cats[:]:
                 self.current_node.add_child(cat)
                 self.carried_cats.remove(cat)
@@ -313,7 +300,9 @@ class DirectoryTree:
             print(f"Cubby {cubby_name} already exists!")
     def prowl(self):
         """Lists all cats and sub-cubbies in current directory."""
-        print("Current directory contents:")
+        if not self.current_node.children or len(self.current_node.children) == 0:
+            print("No cats or cubbies in this cubby")
+            return
+        print("Current cubby contents:")
         for child in self.current_node.children:
-            if child.name not in [".", ".."]:
-                print(f"- {child.name} ({'cubby' if not child.is_file else 'cat'})")
+            print(f" - {child.name} ({'cubby' if not child.is_file else 'cat'})")
