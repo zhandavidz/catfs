@@ -285,6 +285,76 @@ class TestLRUCache(unittest.TestCase):
         self.assertIsNotNone(self.cache.get("/file1"))  # Should still be in cache
         self.assertIsNone(self.cache.get("/file2"))  # Should be evicted
 
+class TestDirectoryTreeWithCache(unittest.TestCase):
+    def setUp(self):
+        # Use a unique name for each test to avoid pickle conflicts
+        self.cafe_name = f"cachecafe_{random.randint(0, int(1e9))}"
+        self.tree = DirectoryTree(name=self.cafe_name, role=Role.ADMIN, cache_size=3)
+        # Rescue 4 cats to overflow the cache (cache size is 3)
+        self.cat_names = ["cat1", "cat2", "cat3", "cat4"]
+        for name in self.cat_names:
+            self.tree.rescue(name, Role.ADMIN)
+
+    def tearDown(self):
+        # Clean up the pickle file after each test
+        pkl_path = os.path.join("cafes", f"{self.cafe_name}.pkl")
+        if os.path.exists(pkl_path):
+            os.remove(pkl_path)
+
+    def test_cache_overflow_and_eviction(self):
+        # Access the first three cats to fill the cache
+        for name in self.cat_names[:3]:
+            f = io.StringIO()
+            with redirect_stdout(f):
+                self.tree.find(name)
+            self.assertIn(f"Found {name}", f.getvalue())
+        # Now access the fourth cat, which should evict the least recently used (cat1)
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat4")
+        self.assertIn("Found cat4", f.getvalue())
+        # Access cat1 again, which was evicted, so it should still be found (and re-cached)
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat1")
+        self.assertIn("Found cat1", f.getvalue())
+        # Now cat2 should be the least recently used and evicted if we access another new cat
+        self.tree.rescue("cat5", Role.ADMIN)
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat5")
+        self.assertIn("Found cat5", f.getvalue())
+        # Access cat2, which may have been evicted, but should still be found
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat2")
+        self.assertIn("Found cat2", f.getvalue())
+
+    def test_cache_refill_after_eviction(self):
+        # Fill cache and overflow
+        for name in self.cat_names:
+            f = io.StringIO()
+            with redirect_stdout(f):
+                self.tree.find(name)
+            self.assertIn(f"Found {name}", f.getvalue())
+        # At this point, the cache should have cat2, cat3, cat4 (cat1 evicted)
+        # Access cat1 again, which should be re-cached
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat1")
+        self.assertIn("Found cat1", f.getvalue())
+        # Now cat2 should be evicted if we access another new cat
+        self.tree.rescue("cat6", Role.ADMIN)
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat6")
+        self.assertIn("Found cat6", f.getvalue())
+        # Access cat2, which may have been evicted, but should still be found
+        f = io.StringIO()
+        with redirect_stdout(f):
+            self.tree.find("cat2")
+        self.assertIn("Found cat2", f.getvalue())
+
 def run_tests():
     # Set up logging
     logging.basicConfig(level=logging.INFO)

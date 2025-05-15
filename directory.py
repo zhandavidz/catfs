@@ -78,7 +78,11 @@ class FolderNode(BaseNode):
         return None
 
 class DirectoryTree:
-    def __init__(self, name: str, role: Role = Role.VISITOR):
+    def __init__(self, name: str, cache_size: int=0, role: Role = Role.VISITOR):
+        if cache_size > 0:
+            self.cache = LRUCache(cache_size)
+        else:
+            self.cache = None
         self.name = name
         self.role = role
         self.carried_cats = []
@@ -133,9 +137,19 @@ class DirectoryTree:
                     if found:
                         return found
             return None
-
+        
+        # Check cache first
+        if self.cache:
+            cached_result = self.cache.get(name)
+            if cached_result:
+                return cached_result
+        
+        # If not in cache, search the tree
         result = _recursively_find_file(self.root, name)
 
+        # If found, cache the result
+        if self.cache and result:
+            self.cache.put(name, result)
 
         return result
     
