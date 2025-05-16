@@ -79,6 +79,8 @@ class FolderNode(BaseNode):
 
 class DirectoryTree:
     def __init__(self, name: str, cache_size: int=0, role: Role = Role.VISITOR):
+        self.cache_hits = 0
+        self.cache_accesses = 0
         if cache_size > 0:
             self.cache = LRUCache(cache_size)
         else:
@@ -138,10 +140,13 @@ class DirectoryTree:
                         return found
             return None
         
+        self.cache_accesses += 1
+
         # Check cache first
         if self.cache:
             cached_result = self.cache.get(name)
             if cached_result:
+                self.cache_hits += 1
                 return cached_result
         
         # If not in cache, search the tree
