@@ -1,12 +1,12 @@
 # implement caching algorithm
 from collections import OrderedDict
-from typing import Optional
-from directory import FileNode
+from typing import Optional, TypeVar, Generic
 
-class LRUCache:
-    # rewrite the functions 
+T = TypeVar('T')
+
+class LRUCache(Generic[T]):
     """
-    A Least Recently Used (LRU) cache implementation for storing FileNode objects.
+    A Least Recently Used (LRU) cache implementation for storing generic objects.
     Uses OrderedDict to maintain the order of access and automatically evict least recently used items.
     """
     def __init__(self, capacity: int):
@@ -17,12 +17,12 @@ class LRUCache:
         self.cache = OrderedDict()
         self.capacity = capacity
 
-    def get(self, path: str) -> Optional[FileNode]:
+    def get(self, path: str) -> Optional[T]:
         """        
         Args:
             path (str): The path to look up in the cache
         Returns:
-            Optional[FileNode]: The cached FileNode if found, None otherwise
+            Optional[T]: The cached object if found, None otherwise
         """
         if path not in self.cache:
             return None
@@ -30,11 +30,11 @@ class LRUCache:
         self.cache.move_to_end(path)
         return self.cache[path]
 
-    def put(self, path: str, content: FileNode) -> None:
+    def put(self, path: str, content: T) -> None:
         """        
         Args:
             path (str): The path to store in the cache
-            content (FileNode): The FileNode to cache
+            content (T): The object to cache
         """
         if path in self.cache:
             # Update and mark as recently used
