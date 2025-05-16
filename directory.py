@@ -167,7 +167,7 @@ class DirectoryTree:
         while current is not None and current != self.root:
             path.append(current.name)
             current = getattr(current, 'parent', None)
-        return f"/{"/".join(reversed(path))}"
+        return "/" + "/".join(reversed(path))
             
     
     def find(self, name):
