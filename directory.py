@@ -130,14 +130,16 @@ class DirectoryTree:
         # FIXME: eventually use cache here if enabled
         def _recursively_find_file(node, name):
             # Recursively search in children
-            for child in node.children:
-                if child.name == name:
-                    return child
+            folders = []
             for child in node.children:
                 if not child.is_file:
-                    found = _recursively_find_file(child, name)
-                    if found:
-                        return found
+                    folders.append(child)
+                elif child.name == name:
+                    return child
+            for child in folders:
+                found = _recursively_find_file(child, name)
+                if found:
+                    return found
             return None
         
         self.cache_accesses += 1
@@ -177,7 +179,7 @@ class DirectoryTree:
             print(f"{name} not found in the tree")
     def rescue(self, cat_name, required_role: Role = Role.STAFF):
         """Creates a new cat with a required role"""
-        if self._find_node_in_current(cat_name):
+        if self._find_node_in_current(cat_name) and self._find_node_in_current(cat_name).is_file: # type: ignore
             print(f"Cat {cat_name} already exists!")
             return
         new_cat = FileNode(cat_name, required_role, parent=self.current_node)
@@ -311,13 +313,13 @@ class DirectoryTree:
             print(f"Not carrying {cat_name}")
     def mkcby(self, cubby_name):
         """Creates a new directory (cubby)."""
-        if not self._find_node_in_current(cubby_name):
+        if self._find_node_in_current(cubby_name) and not self._find_node_in_current(cubby_name).is_file: # type: ignore
+            print(f"Cubby {cubby_name} already exists!")
+        else:
             new_cubby = FolderNode(cubby_name, parent=self.current_node)
             self.current_node.add_child(new_cubby)
             self._save_to_pkl()
             print(f"Created new cubby: {cubby_name}")
-        else:
-            print(f"Cubby {cubby_name} already exists!")
     def prowl(self):
         """Lists all cats and sub-cubbies in current directory."""
         if not self.current_node.children or len(self.current_node.children) == 0:
